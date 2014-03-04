@@ -189,6 +189,9 @@ public class GroupedTimingStatistics implements Serializable, Cloneable {
             String tag = tagWithTimingStatistics.getKey();
             TimingStatistics timingStatistics = tagWithTimingStatistics.getValue();
             double totalTimeForTag = timingStatistics.getCount() * timingStatistics.getMean();
+            System.out.println("50 % LINE = " + timingStatistics.get50Line());
+            System.out.println("95 % LINE = " + timingStatistics.get95Line());
+            System.out.println("99 % LINE = " + timingStatistics.get99Line());
             retVal.append(String.format("%-" + paddingToAllowForLongestTag + "s%12.1f%12d%12d%12.1f%12d%12.0f%n",
                                         tag,
                                         timingStatistics.getMean(),

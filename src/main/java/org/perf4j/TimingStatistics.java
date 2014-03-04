@@ -31,11 +31,45 @@ public class TimingStatistics implements Serializable, Cloneable {
     private long min;
     private int count;
 
+    /**
+     * i need to create x buckets or bins
+     * say 128
+     * each needs to store sum and count integer (i.e. 8bytes)
+     * step is 50 ms, i.e. 0-50ms, 50-100ms etc.
+     * <p/>
+     * when sample arrives it needs to be classified to an appropriate bin
+     * it it's solely done on it's value
+     * <p/>
+     * bin index = time / step_size
+     */
+
+    static class Bin {
+        int count;
+        long sum;
+
+        double getMean() {
+            return count == 0 ? 0 : sum * 1.0d / count;
+        }
+
+        @Override
+        public String toString() {
+            return "Count: " + count + ",Sum: " + sum + ",Mean: " + getMean();
+        }
+    }
+
+    final Bin bins[] = new Bin[128]; //1Kb
+    final static int step = 1; //ms
+
     // --- Constructors ---
+
     /**
      * Default constructor allows you to set performance statistics later using the setter methods.
      */
-    public TimingStatistics() { }
+    public TimingStatistics() {
+        for (int i = 0; i < bins.length; i++) {
+            bins[i] = new Bin();
+        }
+    }
 
     /**
      * Creates a TimingStatistics object with the specified data.
@@ -47,6 +81,7 @@ public class TimingStatistics implements Serializable, Cloneable {
      * @param count             The total number of executions that were timed.
      */
     public TimingStatistics(double mean, double standardDeviation, long max, long min, int count) {
+        this();
         this.mean = mean;
         this.runningQ = Math.pow(standardDeviation, 2.0) * count;
         this.max = max;
@@ -55,6 +90,7 @@ public class TimingStatistics implements Serializable, Cloneable {
     }
 
     // --- Utility Methods ---
+
     /**
      * This method updates the calculated statistics with a new logged execution time.
      *
@@ -62,6 +98,7 @@ public class TimingStatistics implements Serializable, Cloneable {
      * @return this TimingStatistics instance
      */
     public TimingStatistics addSampleTime(long elapsedTime) {
+        System.out.println(Thread.currentThread() + ": " + elapsedTime);
         count++;
 
         double diffFromMean = elapsedTime - mean;
@@ -82,6 +119,11 @@ public class TimingStatistics implements Serializable, Cloneable {
             }
         }
 
+        //bin it for percentiles
+        int binIdx = (int) (elapsedTime / step >= bins.length ? bins.length - 1 : elapsedTime / step);
+        Bin bin = bins[binIdx];
+        bin.count++;
+        bin.sum += elapsedTime;
         return this;
     }
 
@@ -107,14 +149,36 @@ public class TimingStatistics implements Serializable, Cloneable {
         return count;
     }
 
+    public double get50Line() {
+        return getXLine(.5);
+    }
+
+    public double get95Line() {
+        return getXLine(.95);
+    }
+
+    public double get99Line() {
+        return getXLine(.99);
+    }
+
+    private double getXLine(double x) {
+        long runningSum = 0;
+        for (int i = 0; i < bins.length; i++) {
+            runningSum = runningSum + bins[i].count;
+            if (runningSum >= x * count)
+                return bins[i].getMean();
+        }
+        return getMax();
+    }
+
     // --- Object Methods ---
 
     public String toString() {
         return "mean[" + getMean() +
-               "] stddev[" + getStandardDeviation() +
-               "] min[" + getMin() +
-               "] max[" + getMax() +
-               "] count[" + getCount() + "]";
+                "] stddev[" + getStandardDeviation() +
+                "] min[" + getMin() +
+                "] max[" + getMax() +
+                "] count[" + getCount() + "]";
     }
 
     public TimingStatistics clone() {
